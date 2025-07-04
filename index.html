@@ -1,0 +1,365 @@
+import React, { useState, useEffect } from 'react';
+import { Calendar, Film, TrendingUp, Clock, Users, ChevronRight, Search, X, Check, Truck, RefreshCw } from 'lucide-react';
+
+const MovieNightHub = () => {
+  const [rotation] = useState(['You', 'Taleah', 'Odalis', 'Noah']);
+  const [currentHostIndex, setCurrentHostIndex] = useState(0);
+  const [currentTheme, setCurrentTheme] = useState('Disney Favorites');
+  const [editingTheme, setEditingTheme] = useState(false);
+  const [themeInput, setThemeInput] = useState(currentTheme);
+  const [selectedMovies, setSelectedMovies] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [doingTakeout, setDoingTakeout] = useState(false);
+  const [takeoutPerson, setTakeoutPerson] = useState('');
+  const [movieHistory, setMovieHistory] = useState({
+    'You': [],
+    'Taleah': [],
+    'Odalis': [],
+    'Noah': []
+  });
+  const [showStats, setShowStats] = useState(false);
+
+  // Sample movie data for demo
+  const sampleMovies = [
+    { id: 1, title: 'Beauty and the Beast', year: 1991, poster: '🏰', rating: 8.0, genre: 'Animation' },
+    { id: 2, title: 'The Lion King', year: 1994, poster: '🦁', rating: 8.5, genre: 'Animation' },
+    { id: 3, title: 'Aladdin', year: 1992, poster: '🧞', rating: 8.0, genre: 'Animation' },
+    { id: 4, title: 'Frozen', year: 2013, poster: '❄️', rating: 7.4, genre: 'Animation' },
+    { id: 5, title: 'Moana', year: 2016, poster: '🌊', rating: 7.6, genre: 'Animation' },
+    { id: 6, title: 'Tangled', year: 2010, poster: '🌻', rating: 7.7, genre: 'Animation' }
+  ];
+
+  const currentHost = rotation[currentHostIndex];
+  const nextHost = rotation[(currentHostIndex + 1) % rotation.length];
+
+  const handleSearch = (query) => {
+    setSearchQuery(query);
+    if (query.length > 0) {
+      setIsSearching(true);
+      // Simulate search
+      const results = sampleMovies.filter(movie => 
+        movie.title.toLowerCase().includes(query.toLowerCase())
+      );
+      setSearchResults(results);
+    } else {
+      setSearchResults([]);
+    }
+  };
+
+  const selectMovie = (movie) => {
+    if (selectedMovies.length < 3 && !selectedMovies.find(m => m.id === movie.id)) {
+      setSelectedMovies([...selectedMovies, movie]);
+    }
+    setSearchQuery('');
+    setSearchResults([]);
+    setIsSearching(false);
+  };
+
+  const removeMovie = (movieId) => {
+    setSelectedMovies(selectedMovies.filter(m => m.id !== movieId));
+  };
+
+  const completeMovieNight = () => {
+    if (selectedMovies.length > 0) {
+      // Add to history
+      const updatedHistory = { ...movieHistory };
+      updatedHistory[currentHost] = [
+        ...updatedHistory[currentHost],
+        {
+          movies: selectedMovies,
+          date: new Date().toLocaleDateString(),
+          theme: currentTheme
+        }
+      ];
+      setMovieHistory(updatedHistory);
+      
+      // Move to next person
+      setCurrentHostIndex((currentHostIndex + 1) % rotation.length);
+      setSelectedMovies([]);
+      setDoingTakeout(false);
+      setTakeoutPerson('');
+    }
+  };
+
+  const getStats = (person) => {
+    const history = movieHistory[person];
+    if (history.length === 0) return null;
+    
+    const allMovies = history.flatMap(h => h.movies);
+    const genres = allMovies.map(m => m.genre);
+    const genreCounts = genres.reduce((acc, genre) => {
+      acc[genre] = (acc[genre] || 0) + 1;
+      return acc;
+    }, {});
+    const favoriteGenre = Object.entries(genreCounts).sort(([,a], [,b]) => b - a)[0]?.[0];
+    
+    const avgRating = allMovies.reduce((sum, movie) => sum + movie.rating, 0) / allMovies.length;
+    
+    return {
+      totalPicks: allMovies.length,
+      favoriteGenre,
+      avgRating: avgRating.toFixed(1)
+    };
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-950 to-gray-900 text-white p-4 md:p-8">
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h1 className="text-4xl md:text-5xl font-bold mb-2 bg-gradient-to-r from-red-600 to-red-400 bg-clip-text text-transparent">
+            Movie Night Hub
+          </h1>
+          <p className="text-gray-400">Your weekly cinema experience, organized</p>
+        </div>
+
+        {/* Theme Banner */}
+        <div className="bg-gradient-to-r from-red-700 to-red-500 rounded-xl p-6 mb-8 shadow-2xl">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm opacity-75 mb-1">This Month's Theme</p>
+              {editingTheme ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={themeInput}
+                    onChange={(e) => setThemeInput(e.target.value)}
+                    className="bg-white/20 px-3 py-1 rounded-lg outline-none"
+                    placeholder="Enter theme or 'No Theme'"
+                  />
+                  <button
+                    onClick={() => {
+                      setCurrentTheme(themeInput || 'No Theme');
+                      setEditingTheme(false);
+                    }}
+                    className="bg-white/20 p-1 rounded-lg hover:bg-white/30"
+                  >
+                    <Check className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <h2 className="text-2xl font-bold">{currentTheme}</h2>
+                  <button
+                    onClick={() => {
+                      setThemeInput(currentTheme);
+                      setEditingTheme(true);
+                    }}
+                    className="text-white/60 hover:text-white"
+                  >
+                    ✏️
+                  </button>
+                </div>
+              )}
+            </div>
+            <Film className="w-12 h-12 opacity-50" />
+          </div>
+        </div>
+
+        {/* Current Week */}
+        <div className="grid md:grid-cols-2 gap-8 mb-8 relative z-10">
+          {/* This Week's Host */}
+          <div className="bg-gray-800/50 backdrop-blur rounded-xl p-6 shadow-xl">
+            <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-red-500" />
+              This Week's Host
+            </h3>
+            <div className="text-center py-4">
+              <div className="w-20 h-20 bg-gradient-to-br from-red-600 to-red-800 rounded-full flex items-center justify-center text-2xl font-bold mx-auto mb-3">
+                {currentHost[0]}
+              </div>
+              <p className="text-2xl font-bold">{currentHost}</p>
+              <p className="text-gray-400 text-sm mt-1">
+                Next up: {nextHost}
+              </p>
+            </div>
+          </div>
+
+          {/* Movie Selection */}
+          <div className="bg-gray-800/50 backdrop-blur rounded-xl p-6 shadow-xl relative overflow-visible">
+            <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+              <Film className="w-5 h-5 text-red-500" />
+              {currentHost === 'You' ? 'Your' : `${currentHost}'s`} Pick
+            </h3>
+            
+            {/* Selected Movies */}
+            {selectedMovies.length > 0 && (
+              <div className="mb-4">
+                <div className="space-y-2">
+                  {selectedMovies.map((movie) => (
+                    <div key={movie.id} className="bg-gray-700/50 rounded-lg p-3 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">{movie.poster}</span>
+                        <div>
+                          <p className="font-semibold">{movie.title}</p>
+                          <p className="text-sm text-gray-400">★ {movie.rating} • {movie.year}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => removeMovie(movie.id)}
+                        className="text-red-400 hover:text-red-300"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <a
+                    href="https://www.imdb.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-red-500 hover:text-red-400"
+                  >
+                    View on IMDB →
+                  </a>
+                  <a
+                    href="https://letterboxd.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-red-500 hover:text-red-400"
+                  >
+                    View on Letterboxd →
+                  </a>
+                </div>
+              </div>
+            )}
+
+            {/* Search */}
+            {currentHost === 'You' && selectedMovies.length < 3 && (
+              <div className="relative z-50">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => handleSearch(e.target.value)}
+                  placeholder="Search for a movie..."
+                  className="w-full bg-gray-700/50 rounded-lg px-4 py-2 pl-10 outline-none focus:ring-2 focus:ring-red-500"
+                />
+                <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+                
+                {searchResults.length > 0 && (
+                  <div className="absolute top-full mt-2 w-full bg-gray-900 rounded-lg shadow-xl z-50 border border-gray-700 max-h-60 overflow-y-auto">
+                    {searchResults.map((movie) => (
+                      <button
+                        key={movie.id}
+                        onClick={() => selectMovie(movie)}
+                        className="w-full p-3 hover:bg-gray-800 flex items-center gap-3 text-left border-b border-gray-800 last:border-b-0"
+                      >
+                        <span className="text-2xl">{movie.poster}</span>
+                        <div>
+                          <p className="font-semibold">{movie.title}</p>
+                          <p className="text-sm text-gray-400">★ {movie.rating} • {movie.year}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {selectedMovies.length === 0 && currentHost !== 'You' && (
+              <p className="text-gray-400 text-center py-8">
+                Waiting for {currentHost} to pick...
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Takeout Section */}
+        <div className="bg-gray-800/50 backdrop-blur rounded-xl p-6 mb-8 shadow-xl relative z-0">
+          <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+            <Truck className="w-5 h-5 text-red-500" />
+            Takeout Tonight?
+          </h3>
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={doingTakeout}
+                onChange={(e) => setDoingTakeout(e.target.checked)}
+                className="w-5 h-5 rounded"
+              />
+              <span>Yes, we're doing takeout!</span>
+            </label>
+            
+            {doingTakeout && (
+              <select
+                value={takeoutPerson}
+                onChange={(e) => setTakeoutPerson(e.target.value)}
+                className="bg-gray-700/50 rounded-lg px-4 py-2 outline-none"
+              >
+                <option value="">Who's picking up?</option>
+                {rotation.map(person => (
+                  <option key={person} value={person}>{person}</option>
+                ))}
+              </select>
+            )}
+          </div>
+        </div>
+
+        {/* Complete Movie Night Button */}
+        {selectedMovies.length > 0 && (
+          <div className="text-center mb-8">
+            <button
+              onClick={completeMovieNight}
+              className="bg-gradient-to-r from-green-600 to-green-700 px-8 py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all flex items-center gap-2 mx-auto"
+            >
+              <Check className="w-5 h-5" />
+              Movie Night Complete!
+            </button>
+            <p className="text-sm text-gray-400 mt-2">
+              This will save tonight's pick and move to {nextHost}
+            </p>
+          </div>
+        )}
+
+        {/* Stats Toggle */}
+        <div className="text-center mb-8">
+          <button
+            onClick={() => setShowStats(!showStats)}
+            className="text-red-500 hover:text-red-400 flex items-center gap-2 mx-auto"
+          >
+            <TrendingUp className="w-4 h-4" />
+            {showStats ? 'Hide' : 'Show'} Movie Stats
+          </button>
+        </div>
+
+        {/* Stats Section */}
+        {showStats && (
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {rotation.map(person => {
+              const stats = getStats(person);
+              return (
+                <div key={person} className="bg-gray-800/50 backdrop-blur rounded-xl p-6 shadow-xl">
+                  <div className="w-16 h-16 bg-gradient-to-br from-red-600 to-red-800 rounded-full flex items-center justify-center text-xl font-bold mx-auto mb-3">
+                    {person[0]}
+                  </div>
+                  <h4 className="font-semibold text-center mb-3">{person}</h4>
+                  {stats ? (
+                    <div className="space-y-2 text-sm">
+                      <p className="text-gray-400">
+                        <span className="text-white font-semibold">{stats.totalPicks}</span> movies picked
+                      </p>
+                      <p className="text-gray-400">
+                        Loves <span className="text-white font-semibold">{stats.favoriteGenre}</span>
+                      </p>
+                      <p className="text-gray-400">
+                        Avg rating: <span className="text-white font-semibold">★ {stats.avgRating}</span>
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 text-center text-sm">No picks yet</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default MovieNightHub;
