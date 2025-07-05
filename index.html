@@ -13,54 +13,98 @@
     <div id="root"></div>
     
     <script type="text/babel">
-        const { useState } = React;
+        const { useState, useEffect } = React;
 
         function MovieNightHub() {
-            const [rotation] = useState(['You', 'Taleah', 'Odalis', 'Noah']);
+            const [rotation] = useState(['Ferny', 'Taleah', 'Odalis', 'Noah']);
             const [currentHostIndex, setCurrentHostIndex] = useState(0);
-            const [currentTheme, setCurrentTheme] = useState('Disney Favorites');
+            const [currentTheme, setCurrentTheme] = useState('December Movie Picks');
             const [editingTheme, setEditingTheme] = useState(false);
             const [themeInput, setThemeInput] = useState(currentTheme);
             const [selectedMovies, setSelectedMovies] = useState([]);
             const [searchQuery, setSearchQuery] = useState('');
             const [searchResults, setSearchResults] = useState([]);
+            const [isSearching, setIsSearching] = useState(false);
             const [doingTakeout, setDoingTakeout] = useState(false);
             const [takeoutPerson, setTakeoutPerson] = useState('');
             const [movieHistory, setMovieHistory] = useState({
-                'You': [],
+                'Ferny': [],
                 'Taleah': [],
                 'Odalis': [],
                 'Noah': []
             });
             const [showStats, setShowStats] = useState(false);
 
-            const sampleMovies = [
-                { id: 1, title: 'Beauty and the Beast', year: 1991, poster: '🏰', rating: 8.0, genre: 'Animation' },
-                { id: 2, title: 'The Lion King', year: 1994, poster: '🦁', rating: 8.5, genre: 'Animation' },
-                { id: 3, title: 'Aladdin', year: 1992, poster: '🧞', rating: 8.0, genre: 'Animation' },
-                { id: 4, title: 'Frozen', year: 2013, poster: '❄️', rating: 7.4, genre: 'Animation' },
-                { id: 5, title: 'Moana', year: 2016, poster: '🌊', rating: 7.6, genre: 'Animation' },
-                { id: 6, title: 'Tangled', year: 2010, poster: '🌻', rating: 7.7, genre: 'Animation' }
-            ];
+            const TMDB_API_KEY = '74d03cacdc4e1c5bffb05edfe12c09fd';
+            const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
+            const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
 
             const currentHost = rotation[currentHostIndex];
             const nextHost = rotation[(currentHostIndex + 1) % rotation.length];
 
+            // Search movies using TMDB API
+            const searchMovies = async (query) => {
+                if (!query) return;
+                
+                setIsSearching(true);
+                try {
+                    const response = await fetch(
+                        `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}`
+                    );
+                    const data = await response.json();
+                    
+                    // Format the results
+                    const formattedResults = data.results.slice(0, 5).map(movie => ({
+                        id: movie.id,
+                        title: movie.title,
+                        year: movie.release_date ? new Date(movie.release_date).getFullYear() : 'N/A',
+                        poster: movie.poster_path ? `${TMDB_IMAGE_BASE}${movie.poster_path}` : null,
+                        rating: movie.vote_average ? movie.vote_average.toFixed(1) : 'N/A',
+                        overview: movie.overview,
+                        tmdb_id: movie.id
+                    }));
+                    
+                    setSearchResults(formattedResults);
+                } catch (error) {
+                    console.error('Error searching movies:', error);
+                } finally {
+                    setIsSearching(false);
+                }
+            };
+
+            // Get IMDB ID for a movie
+            const getMovieDetails = async (tmdbId) => {
+                try {
+                    const response = await fetch(
+                        `${TMDB_BASE_URL}/movie/${tmdbId}/external_ids?api_key=${TMDB_API_KEY}`
+                    );
+                    const data = await response.json();
+                    return data.imdb_id;
+                } catch (error) {
+                    console.error('Error getting movie details:', error);
+                    return null;
+                }
+            };
+
             const handleSearch = (query) => {
                 setSearchQuery(query);
-                if (query.length > 0) {
-                    const results = sampleMovies.filter(movie => 
-                        movie.title.toLowerCase().includes(query.toLowerCase())
-                    );
-                    setSearchResults(results);
+                if (query.length > 2) {
+                    // Debounce the search
+                    const timeoutId = setTimeout(() => {
+                        searchMovies(query);
+                    }, 500);
+                    return () => clearTimeout(timeoutId);
                 } else {
                     setSearchResults([]);
                 }
             };
 
-            const selectMovie = (movie) => {
+            const selectMovie = async (movie) => {
                 if (selectedMovies.length < 3 && !selectedMovies.find(m => m.id === movie.id)) {
-                    setSelectedMovies([...selectedMovies, movie]);
+                    // Get IMDB ID for the movie
+                    const imdbId = await getMovieDetails(movie.tmdb_id);
+                    const movieWithImdb = { ...movie, imdb_id: imdbId };
+                    setSelectedMovies([...selectedMovies, movieWithImdb]);
                 }
                 setSearchQuery('');
                 setSearchResults([]);
@@ -95,19 +139,15 @@
                 if (history.length === 0) return null;
                 
                 const allMovies = history.flatMap(h => h.movies);
-                const genres = allMovies.map(m => m.genre);
-                const genreCounts = genres.reduce((acc, genre) => {
-                    acc[genre] = (acc[genre] || 0) + 1;
-                    return acc;
-                }, {});
-                const favoriteGenre = Object.entries(genreCounts).sort(([,a], [,b]) => b - a)[0]?.[0];
-                
-                const avgRating = allMovies.reduce((sum, movie) => sum + movie.rating, 0) / allMovies.length;
+                const avgRating = allMovies.reduce((sum, movie) => {
+                    const rating = parseFloat(movie.rating);
+                    return isNaN(rating) ? sum : sum + rating;
+                }, 0) / allMovies.length;
                 
                 return {
                     totalPicks: allMovies.length,
-                    favoriteGenre,
-                    avgRating: avgRating.toFixed(1)
+                    avgRating: avgRating.toFixed(1),
+                    lastPick: allMovies[allMovies.length - 1]?.title || 'N/A'
                 };
             };
 
@@ -181,7 +221,7 @@
 
                             <div className="bg-gray-800/50 backdrop-blur rounded-xl p-6 shadow-xl relative overflow-visible">
                                 <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                                    🎬 {currentHost === 'You' ? 'Your' : `${currentHost}'s`} Pick
+                                    🎬 {currentHost}'s Pick
                                 </h3>
                                 
                                 {selectedMovies.length > 0 && (
@@ -190,7 +230,17 @@
                                             {selectedMovies.map((movie) => (
                                                 <div key={movie.id} className="bg-gray-700/50 rounded-lg p-3 flex items-center justify-between">
                                                     <div className="flex items-center gap-3">
-                                                        <span className="text-2xl">{movie.poster}</span>
+                                                        {movie.poster ? (
+                                                            <img 
+                                                                src={movie.poster} 
+                                                                alt={movie.title}
+                                                                className="w-12 h-18 object-cover rounded"
+                                                            />
+                                                        ) : (
+                                                            <div className="w-12 h-18 bg-gray-600 rounded flex items-center justify-center">
+                                                                🎬
+                                                            </div>
+                                                        )}
                                                         <div>
                                                             <p className="font-semibold">{movie.title}</p>
                                                             <p className="text-sm text-gray-400">★ {movie.rating} • {movie.year}</p>
@@ -206,16 +256,18 @@
                                             ))}
                                         </div>
                                         <div className="mt-3 flex gap-2">
+                                            {selectedMovies[0]?.imdb_id && (
+                                                <a
+                                                    href={`https://www.imdb.com/title/${selectedMovies[0].imdb_id}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-sm text-red-500 hover:text-red-400"
+                                                >
+                                                    View on IMDB →
+                                                </a>
+                                            )}
                                             <a
-                                                href="https://www.imdb.com"
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="text-sm text-red-500 hover:text-red-400"
-                                            >
-                                                View on IMDB →
-                                            </a>
-                                            <a
-                                                href="https://letterboxd.com"
+                                                href={`https://letterboxd.com/search/${encodeURIComponent(selectedMovies[0]?.title || '')}/`}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
                                                 className="text-sm text-red-500 hover:text-red-400"
@@ -226,39 +278,62 @@
                                     </div>
                                 )}
 
-                                {currentHost === 'You' && selectedMovies.length < 3 && (
+                                {currentHost === 'Ferny' && selectedMovies.length < 3 && (
                                     <div className="relative z-50">
                                         <input
                                             type="text"
                                             value={searchQuery}
                                             onChange={(e) => handleSearch(e.target.value)}
-                                            placeholder="Search for a movie..."
+                                            placeholder="Search for any movie..."
                                             className="w-full bg-gray-700/50 rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-red-500 text-white placeholder-gray-400"
                                         />
                                         
-                                        {searchResults.length > 0 && (
-                                            <div className="absolute top-full mt-2 w-full bg-gray-900 rounded-lg shadow-xl z-50 border border-gray-700 max-h-60 overflow-y-auto">
-                                                {searchResults.map((movie) => (
-                                                    <button
-                                                        key={movie.id}
-                                                        onClick={() => selectMovie(movie)}
-                                                        className="w-full p-3 hover:bg-gray-800 flex items-center gap-3 text-left border-b border-gray-800 last:border-b-0"
-                                                    >
-                                                        <span className="text-2xl">{movie.poster}</span>
-                                                        <div>
-                                                            <p className="font-semibold">{movie.title}</p>
-                                                            <p className="text-sm text-gray-400">★ {movie.rating} • {movie.year}</p>
-                                                        </div>
-                                                    </button>
-                                                ))}
+                                        {(searchResults.length > 0 || isSearching) && (
+                                            <div className="absolute top-full mt-2 w-full bg-gray-900 rounded-lg shadow-xl z-50 border border-gray-700 max-h-96 overflow-y-auto">
+                                                {isSearching ? (
+                                                    <div className="p-4 text-center text-gray-400">
+                                                        Searching movies...
+                                                    </div>
+                                                ) : (
+                                                    searchResults.map((movie) => (
+                                                        <button
+                                                            key={movie.id}
+                                                            onClick={() => selectMovie(movie)}
+                                                            className="w-full p-3 hover:bg-gray-800 flex items-center gap-3 text-left border-b border-gray-800 last:border-b-0"
+                                                        >
+                                                            {movie.poster ? (
+                                                                <img 
+                                                                    src={movie.poster} 
+                                                                    alt={movie.title}
+                                                                    className="w-16 h-24 object-cover rounded"
+                                                                />
+                                                            ) : (
+                                                                <div className="w-16 h-24 bg-gray-700 rounded flex items-center justify-center">
+                                                                    🎬
+                                                                </div>
+                                                            )}
+                                                            <div className="flex-1">
+                                                                <p className="font-semibold">{movie.title}</p>
+                                                                <p className="text-sm text-gray-400">★ {movie.rating} • {movie.year}</p>
+                                                                <p className="text-xs text-gray-500 line-clamp-2 mt-1">{movie.overview}</p>
+                                                            </div>
+                                                        </button>
+                                                    ))
+                                                )}
                                             </div>
                                         )}
                                     </div>
                                 )}
 
-                                {selectedMovies.length === 0 && currentHost !== 'You' && (
+                                {selectedMovies.length === 0 && currentHost !== 'Ferny' && (
                                     <p className="text-gray-400 text-center py-8">
                                         Waiting for {currentHost} to pick...
+                                    </p>
+                                )}
+
+                                {currentHost !== 'Ferny' && (
+                                    <p className="text-xs text-gray-500 text-center mt-4">
+                                        Only {currentHost} can select movies this week
                                     </p>
                                 )}
                             </div>
@@ -333,7 +408,7 @@
                                                         <span className="text-white font-semibold">{stats.totalPicks}</span> movies picked
                                                     </p>
                                                     <p className="text-gray-400">
-                                                        Loves <span className="text-white font-semibold">{stats.favoriteGenre}</span>
+                                                        Last: <span className="text-white font-semibold">{stats.lastPick}</span>
                                                     </p>
                                                     <p className="text-gray-400">
                                                         Avg rating: <span className="text-white font-semibold">★ {stats.avgRating}</span>
